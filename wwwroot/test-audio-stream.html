@@ -1,0 +1,298 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Stream Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+
+        .controls {
+            margin: 20px 0;
+        }
+
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        .status {
+            padding: 15px;
+            background: #f0f0f0;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+
+        .log {
+            background: #000;
+            color: #0f0;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: monospace;
+            height: 200px;
+            overflow-y: auto;
+        }
+
+        select {
+            padding: 8px;
+            font-size: 14px;
+            margin: 5px;
+            min-width: 300px;
+        }
+
+        canvas {
+            width: 100%;
+            height: 100px;
+            background: #000;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Audio Stream Test</h1>
+
+    <div class="controls">
+        <h3>1. Select Device</h3>
+        <select id="deviceSelect">
+            <option value="">Loading devices...</option>
+        </select>
+        <button onclick="selectDevice()">Select Device</button>
+    </div>
+
+    <div class="controls">
+        <h3>2. Control Capture</h3>
+        <button onclick="startCapture()">Start Capture</button>
+        <button onclick="stopCapture()">Stop Capture</button>
+        <button onclick="getStatus()">Get Status</button>
+    </div>
+
+    <div class="controls">
+        <h3>3. WebSocket Stream</h3>
+        <button onclick="connectWebSocket()">Connect to Stream</button>
+        <button onclick="disconnectWebSocket()">Disconnect</button>
+    </div>
+
+    <div class="status">
+        <h3>Status</h3>
+        <div id="status">Not connected</div>
+    </div>
+
+    <h3>Audio Visualizer</h3>
+    <canvas id="visualizer"></canvas>
+
+    <h3>Console Log</h3>
+    <div class="log" id="log"></div>
+
+    <script>
+        const API_BASE = 'http://localhost:5024';
+        let ws = null;
+        let audioContext = null;
+        let selectedDeviceId = null;
+
+        // Canvas setup
+        const canvas = document.getElementById('visualizer');
+        const canvasCtx = canvas.getContext('2d');
+        canvas.width = canvas.offsetWidth;
+        canvas.height = 100;
+
+        function log(message) {
+            const logDiv = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            logDiv.innerHTML += `[${timestamp}] ${message}<br>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(message);
+        }
+
+        // Load devices
+        async function loadDevices() {
+            try {
+                const response = await fetch(`${API_BASE}/api/devices`);
+                const data = await response.json();
+
+                const select = document.getElementById('deviceSelect');
+                select.innerHTML = '<option value="">-- Select a device --</option>';
+
+                // Add render devices
+                data.renderDevices.forEach(device => {
+                    const option = document.createElement('option');
+                    option.value = device.id;
+                    option.textContent = `[Render] ${device.name}`;
+                    select.appendChild(option);
+                });
+
+                // Add capture devices
+                data.captureDevices.forEach(device => {
+                    const option = document.createElement('option');
+                    option.value = device.id;
+                    option.textContent = `[Capture] ${device.name}`;
+                    select.appendChild(option);
+                });
+
+                log('Devices loaded successfully');
+            } catch (error) {
+                log(`Error loading devices: ${error.message}`);
+            }
+        }
+
+        async function selectDevice() {
+            const select = document.getElementById('deviceSelect');
+            selectedDeviceId = select.value;
+
+            if (!selectedDeviceId) {
+                alert('Please select a device');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/api/devices/select`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ deviceId: selectedDeviceId })
+                });
+
+                const data = await response.json();
+                log(`Device selected: ${data.message}`);
+                document.getElementById('status').textContent = `Device selected: ${selectedDeviceId}`;
+            } catch (error) {
+                log(`Error selecting device: ${error.message}`);
+            }
+        }
+
+        async function startCapture() {
+            try {
+                const response = await fetch(`${API_BASE}/api/capture/start`, {
+                    method: 'POST'
+                });
+
+                const data = await response.json();
+                log(`Capture started: ${data.message}`);
+                document.getElementById('status').textContent = 'Capturing...';
+            } catch (error) {
+                log(`Error starting capture: ${error.message}`);
+            }
+        }
+
+        async function stopCapture() {
+            try {
+                const response = await fetch(`${API_BASE}/api/capture/stop`, {
+                    method: 'POST'
+                });
+
+                const data = await response.json();
+                log(`Capture stopped: ${data.message}`);
+                document.getElementById('status').textContent = 'Stopped';
+            } catch (error) {
+                log(`Error stopping capture: ${error.message}`);
+            }
+        }
+
+        async function getStatus() {
+            try {
+                const response = await fetch(`${API_BASE}/api/capture/status`);
+                const data = await response.json();
+                log(`Status: ${JSON.stringify(data, null, 2)}`);
+                document.getElementById('status').innerHTML = `
+                    <strong>Capturing:</strong> ${data.isCapturing}<br>
+                    <strong>Device:</strong> ${data.selectedDevice ? data.selectedDevice.name : 'None'}<br>
+                    <strong>Clients:</strong> ${data.connectedClients}<br>
+                    <strong>Format:</strong> ${data.waveFormat ? `${data.waveFormat.sampleRate}Hz, ${data.waveFormat.channels}ch` : 'N/A'}
+                `;
+            } catch (error) {
+                log(`Error getting status: ${error.message}`);
+            }
+        }
+
+        function connectWebSocket() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                log('WebSocket already connected');
+                return;
+            }
+
+            ws = new WebSocket('ws://localhost:5024/ws/audio');
+
+            ws.onopen = () => {
+                log('WebSocket connected');
+                document.getElementById('status').textContent = 'WebSocket connected - receiving audio';
+            };
+
+            ws.onmessage = (event) => {
+                if (typeof event.data === 'string') {
+                    // Format information
+                    const format = JSON.parse(event.data);
+                    log(`Audio format: ${format.sampleRate}Hz, ${format.channels}ch, ${format.bitsPerSample}bit`);
+                } else {
+                    // Binary audio data
+                    visualizeAudio(event.data);
+                }
+            };
+
+            ws.onerror = (error) => {
+                log(`WebSocket error: ${error}`);
+            };
+
+            ws.onclose = () => {
+                log('WebSocket disconnected');
+                document.getElementById('status').textContent = 'WebSocket disconnected';
+            };
+        }
+
+        function disconnectWebSocket() {
+            if (ws) {
+                ws.close();
+                ws = null;
+                log('WebSocket disconnected');
+            }
+        }
+
+        async function visualizeAudio(data) {
+            const arrayBuffer = await data.arrayBuffer();
+
+            // Clear canvas
+            canvasCtx.fillStyle = '#000';
+            canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw waveform
+            canvasCtx.strokeStyle = '#0f0';
+            canvasCtx.lineWidth = 2;
+            canvasCtx.beginPath();
+
+            // For 32-bit float audio
+            const float32Array = new Float32Array(arrayBuffer);
+            const step = Math.floor(float32Array.length / canvas.width);
+
+            for (let i = 0; i < canvas.width; i++) {
+                const index = i * step;
+                if (index < float32Array.length) {
+                    // Float32 values are already normalized between -1.0 and 1.0
+                    const value = float32Array[index];
+                    const y = ((value + 1) / 2) * canvas.height;
+
+                    if (i === 0) {
+                        canvasCtx.moveTo(i, y);
+                    } else {
+                        canvasCtx.lineTo(i, y);
+                    }
+                }
+            }
+
+            canvasCtx.stroke();
+
+            // Log occasionally to confirm data is coming in
+            if (Math.random() < 0.01) { // Log 1% of packets
+                const maxValue = Math.max(...float32Array.map(Math.abs));
+                log(`Audio data received: ${float32Array.length} samples, max amplitude: ${maxValue.toFixed(3)}`);
+            }
+        }
+
+        // Load devices on page load
+        loadDevices();
+    </script>
+</body>
+</html>
