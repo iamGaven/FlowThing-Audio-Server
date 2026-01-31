@@ -1,13 +1,22 @@
-﻿using NAudio.CoreAudioApi;
+﻿using Audio.Models;
+using NAudio.CoreAudioApi;
 using System;
 using System.Collections.Generic;
 
-namespace AudioDeviceApi
+namespace Audio.Controllers
 {
+    /// <summary>
+    /// Service for managing and retrieving audio device information.
+    /// </summary>
     public class AudioDeviceService
     {
         private MMDeviceEnumerator _enumerator;
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="AudioDeviceService"/> class.
+        /// Creates an MMDeviceEnumerator for querying audio devices.
+        /// </summary>
+        /// <exception cref="Exception">Thrown when the MMDeviceEnumerator cannot be created.</exception>
         public AudioDeviceService()
         {
             try
@@ -21,6 +30,13 @@ namespace AudioDeviceApi
             }
         }
 
+        /// <summary>
+        /// Retrieves all active audio devices, categorized by render (output) and capture (input) devices.
+        /// </summary>
+        /// <returns>
+        /// An anonymous object containing RenderDevices and CaptureDevices lists, 
+        /// or an error object if retrieval fails.
+        /// </returns>
         public object GetAllDevices()
         {
             try
@@ -43,14 +59,17 @@ namespace AudioDeviceApi
             }
         }
 
+        /// <summary>
+        /// Retrieves a list of active audio devices for the specified data flow direction.
+        /// </summary>
+        /// <param name="dataFlow">The data flow direction (Render for output devices, Capture for input devices).</param>
+        /// <returns>A list of <see cref="AudioDeviceInfo"/> objects representing the active devices.</returns>
         public List<AudioDeviceInfo> GetDeviceList(DataFlow dataFlow)
         {
             var deviceList = new List<AudioDeviceInfo>();
-
             try
             {
                 var devices = _enumerator.EnumerateAudioEndPoints(dataFlow, DeviceState.Active);
-
                 int index = 0;
                 foreach (var device in devices)
                 {
@@ -75,16 +94,9 @@ namespace AudioDeviceApi
             {
                 Console.WriteLine($"Error enumerating {dataFlow} devices: {ex.Message}");
             }
-
             return deviceList;
         }
     }
 
-    public class AudioDeviceInfo
-    {
-        public int Index { get; set; }
-        public string Name { get; set; }
-        public string Id { get; set; }
-        public string State { get; set; }
-    }
+  
 }

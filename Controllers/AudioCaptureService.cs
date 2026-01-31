@@ -6,8 +6,11 @@ using System.Net.WebSockets;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace AudioCaptureAPI
+namespace Audio.Controllers
 {
+    /// <summary>
+    /// Service for capturing audio from system devices and streaming it to connected WebSocket clients.
+    /// </summary>
     public class AudioCaptureService
     {
         private MMDevice _selectedDevice;
@@ -19,6 +22,12 @@ namespace AudioCaptureAPI
         // Downsampling settings
         private const int DOWNSAMPLE_FACTOR = 4; // Send every 4th sample (reduces data by 75%)
 
+        /// <summary>
+        /// Selects an audio device for capture by its device ID.
+        /// If capture is currently running, it will be stopped before selecting the new device.
+        /// </summary>
+        /// <param name="deviceId">The unique identifier of the audio device to select.</param>
+        /// <exception cref="Exception">Thrown when the device with the specified ID is not found.</exception>
         public void SelectDevice(string deviceId)
         {
             lock (_lock)
@@ -47,6 +56,11 @@ namespace AudioCaptureAPI
             }
         }
 
+        /// <summary>
+        /// Starts capturing audio from the selected device.
+        /// The captured audio is downsampled and broadcast to all connected WebSocket clients.
+        /// </summary>
+        /// <exception cref="Exception">Thrown when no device is selected or capture is already running.</exception>
         public void StartCapture()
         {
             lock (_lock)
@@ -85,6 +99,9 @@ namespace AudioCaptureAPI
             }
         }
 
+        /// <summary>
+        /// Stops the audio capture if it is currently running and disposes of the capture resources.
+        /// </summary>
         public void StopCapture()
         {
             lock (_lock)
@@ -100,6 +117,12 @@ namespace AudioCaptureAPI
             }
         }
 
+        /// <summary>
+        /// Event handler called when audio data is available from the capture device.
+        /// Downsamples the audio data and broadcasts it to all connected clients.
+        /// </summary>
+        /// <param name="sender">The source of the event.</param>
+        /// <param name="e">Event arguments containing the audio buffer and byte count.</param>
         private void OnDataAvailable(object sender, WaveInEventArgs e)
         {
             // Downsample audio data before broadcasting
@@ -107,6 +130,13 @@ namespace AudioCaptureAPI
             BroadcastAudioData(downsampledData, downsampledData.Length);
         }
 
+        /// <summary>
+        /// Downsamples audio data by taking every Nth frame based on the DOWNSAMPLE_FACTOR.
+        /// This reduces the data size by approximately 75% while maintaining audio quality.
+        /// </summary>
+        /// <param name="buffer">The original audio buffer.</param>
+        /// <param name="bytesRecorded">The number of bytes recorded in the buffer.</param>
+        /// <returns>A new byte array containing the downsampled audio data.</returns>
         private byte[] DownsampleAudio(byte[] buffer, int bytesRecorded)
         {
             if (_capture == null) return buffer;
@@ -138,6 +168,11 @@ namespace AudioCaptureAPI
             return downsampled;
         }
 
+        /// <summary>
+        /// Broadcasts audio data to all connected WebSocket clients asynchronously.
+        /// </summary>
+        /// <param name="buffer">The audio data buffer to broadcast.</param>
+        /// <param name="bytesRecorded">The number of bytes to send from the buffer.</param>
         private async void BroadcastAudioData(byte[] buffer, int bytesRecorded)
         {
             var audioData = new byte[bytesRecorded];
@@ -164,6 +199,12 @@ namespace AudioCaptureAPI
             }
         }
 
+        /// <summary>
+        /// Handles a WebSocket connection for streaming audio data to a client.
+        /// Sends initial wave format information and maintains the connection until closed.
+        /// </summary>
+        /// <param name="webSocket">The WebSocket connection to handle.</param>
+        /// <returns>A task that represents the asynchronous operation.</returns>
         public async Task HandleWebSocketConnection(WebSocket webSocket)
         {
             _connectedClients.Add(webSocket);
@@ -223,6 +264,13 @@ namespace AudioCaptureAPI
             }
         }
 
+        /// <summary>
+        /// Gets the current status of the audio capture service.
+        /// </summary>
+        /// <returns>
+        /// An anonymous object containing capture status, selected device information,
+        /// connected client count, and wave format details.
+        /// </returns>
         public object GetStatus()
         {
             return new
