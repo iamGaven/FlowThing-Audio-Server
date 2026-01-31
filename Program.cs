@@ -1,6 +1,7 @@
 using Audio.Controllers;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.WebHost.UseUrls("http://localhost:5012");
 
 // Add services
 builder.Services.AddSingleton<AudioCaptureService>();
