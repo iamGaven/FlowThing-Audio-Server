@@ -2,9 +2,10 @@
 
 To build the C# audio server as a single executable:
 ```bash
-dotnet publish -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true
+dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:DebugType=None -o ./publish/windows```
 ```
+The compiled executable will be located in `./publish/windows`
 
-The compiled executable will be located in `bin/Release/net[version]/win-x64/publish/`
-
-Once built, place the executable in the `client` folder of the FlowThing app.
+Once built:
+- If you have already built the FlowThing app, place the `audio.exe` file in the `client` folder
+- If you have not already built the FlowThing app, place the `audio.exe` in the `public` folder, then build the FlowThing app
